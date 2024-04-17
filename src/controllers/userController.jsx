@@ -1,4 +1,4 @@
-import UserModel from '../models/userpModel.jsx';
+import UserModel from '../models/userModel.jsx';
 
 export class UserController {
     static async signUp(username, password) {
