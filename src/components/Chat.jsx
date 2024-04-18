@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
-import { View, Text, TextInput, Button, ScrollView, StyleSheet, Modal } from 'react-native';
+import { View, Text, TextInput, Button, ScrollView, StyleSheet, TouchableOpacity, Modal ,TouchableWithoutFeedback} from 'react-native';
 import io from 'socket.io-client';
 import { UserContext } from '../context/UserContext.jsx';
 import { logoutStorage } from './LoginStorage.jsx';
 import GroupModal from './GroupModal.jsx'; // Importa el componente de popup para crear nuevo grupo o unirse a uno existente
+
+import { IconButton } from 'react-native-paper';
+
 
 const App = () => {
   const { user, setUser } = useContext(UserContext);
@@ -13,6 +16,7 @@ const App = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [currentGroupId, setCurrentGroupId] = useState('');
+  const [currentGroupName, setCurrentGroupName] = useState('');
   const [showGroupModal, setShowGroupModal] = useState(false); // Estado para controlar la visibilidad del popup de nuevo grupo o unión a grupo
   const [groupModelMode, setGroupModelMode] = useState('create'); // Estado para controlar el modo del popup de nuevo grupo o unión a grupo
   const socket = useRef(null);
@@ -35,6 +39,8 @@ const App = () => {
       setGroupMessages(prevMessages => prevMessages.concat(msg));
       if (msg.length != 0) {
         setMessages(msg[0].messages)
+        setCurrentGroupId(msg[0].groupId)
+        setCurrentGroupName(msg[0].groupName)
       }
       console.log("groupMessages", groupMessages)
     });
@@ -54,7 +60,7 @@ const App = () => {
 
     socket.current.on('join group', (msg, username, groupMessagesEdit) => {
 
-      console.log("aaaaaaaaaaaaaaddd",msg)
+      console.log("aaaaaaaaaaaaaaddd", msg)
 
       setGroupMessages(prevMessages => prevMessages.concat(msg));
 
@@ -64,7 +70,7 @@ const App = () => {
 
     socket.current.on('create group', (msg, username, groupMessagesEdit) => {
 
-      console.log("aaaaaaaaaaaaaaddd",msg)
+      console.log("aaaaaaaaaaaaaaddd", msg)
 
       setGroupMessages(prevMessages => prevMessages.concat(msg));
 
@@ -93,7 +99,8 @@ const App = () => {
     logoutStorage();
   };
 
-  const handleLoadMsgGroup = (groupId, groupMessages) => {
+  const handleLoadMsgGroup = (groupId, groupName, groupMessages) => {
+    setCurrentGroupName(groupName);
     setCurrentGroupId(groupId);
     setMessages(groupMessages);
   }
@@ -128,40 +135,99 @@ const App = () => {
     }
 
 
+
+
   }
+
+
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+
+  const buttonRef = useRef();
+
+  const toggleMenu = () => {
+    buttonRef.current.measure((x, y, width, height, pageX, pageY) => {
+      setMenuPosition({ x: pageX - 100, y: pageY + height }); // Posición del modal justo debajo del botón
+      setIsMenuVisible(!isMenuVisible);
+    });
+  };
+  const closeMenu = () => {
+    setIsMenuVisible(false);
+  };
+
+
 
   return (
     <>
       <View style={styles.container}>
-        <View style={styles.logoutContainer}>
-          <Button title="Cerrar sesión" onPress={handleLogout} />
-        </View>
-        <View>
-          <View>
-            {groupMessages.length === 0 ? <Text>No hay mensajes</Text> : (
-              groupMessages.map((group, index) => {
-                console.log("groupMessages2", groupMessages)
-                return (
-                  <View key={group.groupId} style={styles.messagesContainer}>
-                    <Button title={group.groupName} onPress={() => handleLoadMsgGroup(group.groupId, group.messages)} />
-                    <Button title="Leave Group" onPress={() => handleLeaveGroup(group.groupId)} />
+        <View style={styles.chatMessageMainContainer}>
+          <View style={styles.groupChatContainer}>
+            <View >
+              <View style={styles.header}>
+                <Text style={styles.textTitle}>Chats</Text>
+                <TouchableOpacity style={styles.verticalDots} ref={buttonRef} onPress={toggleMenu}>
+                  <IconButton
+                    icon="dots-vertical"
+                    iconColor="rgb(204, 204, 204)"
+                    size={24}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Modal
+                visible={isMenuVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsMenuVisible(false)}
+                onBackdropPress={() => this.setModalVisible(false)}
+              >
+        <TouchableWithoutFeedback onPress={closeMenu}>
 
+        
+                <View style={[styles.modalContent, { top: menuPosition.y, left: menuPosition.x }]}>
+                  <TouchableOpacity onPress={() => handleToggleGroupModal('join')}>
+                    <Text style={styles.menuOption}>Join group</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleToggleGroupModal('create')}>
+                    <Text style={styles.menuOption}>Create group</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleLogout}>
+                    <Text style={styles.menuOption}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
+                </TouchableWithoutFeedback>
+              </Modal>
+            </View>
+
+
+
+            {groupMessages.length === 0 ? <></> : (
+              groupMessages.map((group, index) => {
+                return (
+                  <View key={group.groupId} style={[styles.groupsContainer, currentGroupId == group.groupId && styles.openGroupContainer]}>
+                    <TouchableOpacity style={styles.groupNameButtonTouchable} onPress={() => handleLoadMsgGroup(group.groupId, group.groupName, group.messages)}>
+                      <Text numberOfLines={1} ellipsizeMode="tail" style={styles.groupNameButton}>{group.groupName}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.button, styles.leaveButton]} onPress={() => handleLeaveGroup(group.groupId)}>
+                      <Text style={styles.buttonText}>X</Text>
+                    </TouchableOpacity>
                   </View>
                 );
               })
             )}
-            <Button title="Join group" onPress={() => handleToggleGroupModal('join')} />
-            <Button title="Create group" onPress={() => handleToggleGroupModal('create')} />
+
           </View>
 
           <View style={styles.chatContainer}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-              {messages.length === 0 ? <Text>No hay mensajes</Text> : (
+            <View style={styles.header}>
+              <Text style={styles.textTitle}>{currentGroupName}</Text>
+            </View>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              {messages.length === 0 ? <></> : (
                 messages.map((message, index) => {
                   console.log("messages", messages)
                   return (
                     <View key={message.id} style={[styles.message, message.users.username === username && styles.myMessage]}>
-                      <View>
+                      <View style={styles.msgUser}>
                         <Text>{message.users.username}</Text>
                       </View>
                       <View style={styles.msgContainer}>
@@ -179,7 +245,9 @@ const App = () => {
                 onChangeText={setInputMessage}
                 placeholder="Type a message"
               />
-              <Button title="Enviar" onPress={sendMessage} />
+              <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
+                <Text style={styles.sendButtonText}>Enviar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -192,22 +260,60 @@ const App = () => {
         mode={groupModelMode}
       />
     </>
+
   );
 };
 
 const styles = StyleSheet.create({
+  chatMessageMainContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    marginTop: 20,
+    backgroundColor: '#111b21',
+    padding: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a3942',
+    marginBottom: 10,
+  },
+  modalContent: {
+    position: 'absolute',
+    backgroundColor: '#233138',
+    borderRadius: 8,
+    padding: 10,
+    elevation: 5,
+    width: 150,
+  },
+  menuOption: {
+    fontSize: 16,
+    paddingVertical: 8,
+    color: "rgb(204, 204, 204)"
+  },
+  verticalDots: {
+    marginLeft: 'auto',
+  },
+
+
+
   container: {
     flex: 1,
     backgroundColor: '#121212',
     padding: 36,
     alignItems: 'center',
   },
+  groupChatContainer: {
+    flex: 1,
+    marginRight: 10,
+    width: 200,
+  },
   chatContainer: {
     flex: 1,
     width: 400,
     borderWidth: 1,
-    borderColor: '#eee',
-    height: 300,
+    borderColor: '#2a3942',
+    height: '100%',
   },
   logoutContainer: {
     alignItems: 'center',
@@ -217,44 +323,104 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     height: 300,
+    marginHorizontal: 20
   },
-  messagesContainer: {
+  groupsContainer: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#111b21',
+    borderTopWidth: 1,
+    borderTopColor: '#1c262c',
+  },
+  openGroupContainer: {
+    backgroundColor: '#2a3942',
+  },
+  joinGroup: {
+    backgroundColor: '#0cf',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  groupButton: {
+    backgroundColor: '#0cf',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     marginBottom: 10,
   },
-  msgContainer: {
-    flex: 1,
+  button: {
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+ },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  groupNameButton: {
+    marginLeft: 10,
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    width: '100%',
+  },
+  groupNameButtonTouchable: {
+    maxWidth: '70%',
   },
   message: {
     alignSelf: 'flex-start',
-    maxWidth: '250px',
+    maxWidth: 250,
     padding: 8,
     marginBottom: 8,
     backgroundColor: '#0cf',
     borderRadius: 4,
+    marginLeft: 10,
   },
   myMessage: {
     alignSelf: 'flex-end',
     backgroundColor: 'rgb(17, 126, 44)',
+    marginRight: 10,
+  },
+  msgUser: {
+    fontWeight: 'bold',
+    fontSize: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    backgroundColor: '#2a3942',
+    marginTop: 6,
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 9999,
-    borderColor: '#eee',
-    paddingHorizontal: 8,
-    marginRight: 8,
+    borderColor: '#202c33',
     color: '#6c7575',
     backgroundColor: '#3b3b3b',
+    height: '100%',
+    paddingLeft: 10,
+  },
+  sendButton: {
+    backgroundColor: '#0cf',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  textTitle: {
+    color: '#fff', // Color blanco para el texto
+    fontSize: 20, // Tamaño de fuente
+    fontWeight: 'bold',
+    padding: 10,
+    backgroundColor: '#2a3942', // Fondo azul claro
+    height: '50px', // Altura del contenedor
   },
 });
+
 
 export default App;
